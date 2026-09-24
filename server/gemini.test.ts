@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import type { GenerateContentResponse } from '@google/genai';
+import { generateWithFreeFallback, type Generate } from './gemini';
+const response = {text:'{}'} as GenerateContentResponse;
+test('uses the strongest configured free primary without an extra request',async()=>{const calls:string[]=[];const generate:Generate=async request=>{calls.push(request.model);return response;};const result=await generateWithFreeFallback(generate,'gemini-3.8-flash',{contents:'test'});assert.deepEqual(calls,['gemini-3.8-flash']);assert.equal(result.model,'gemini-3.8-flash');});
+test('busy, quota-limited or expired primary uses only the known free fallback',async()=>{for(const status of [429,503,504]){const calls:string[]=[];const generate:Generate=async request=>{calls.push(request.model);if(calls.length===1)throw{status};assert.equal(request.config?.thinkingConfig?.thinkingBudget,0);assert.equal(request.config?.httpOptions?.timeout,8000);return response;};const result=await generateWithFreeFallback(generate,'gemini-3.8-flash',{contents:'test'});assert.deepEqual(calls,['gemini-3.8-flash','gemini-2.5-flash']);assert.equal(result.model,'gemini-2.5-flash');}});
+test('authentication errors and custom models never trigger silent model changes',async()=>{let calls=0;const authError={status:401};await assert.rejects(generateWithFreeFallback(async()=>{calls++;throw authError;},'gemini-3.8-flash',{contents:'test'}),error=>error===authError);assert.equal(calls,1);calls=0;const busyError={status:503};await assert.rejects(generateWithFreeFallback(async()=>{calls++;throw busyError;},'custom-model',{contents:'test'}),error=>error===busyError);assert.equal(calls,1);});
