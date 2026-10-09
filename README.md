@@ -54,6 +54,12 @@ Public speaking is one of the most widespread fears in the world, yet effective 
 
 ## ✨ Key Features
 
+### 🎬 Cinematic Landing & Accounts
+- **Scroll-Driven Flythrough:** The landing page (`/`) walks you from the dark back of the hall, down the aisle as the seats fill row by row, and around to the speaker's view behind the lectern — all driven by scroll with Lenis inertial smoothing and GSAP ScrollTrigger.
+- **Editorial Motion:** Word-by-word manifesto reveal, a velocity-reactive marquee, a pinned horizontal feature track, stacking audience cards and counting statistics. Every effect respects `prefers-reduced-motion`.
+- **Accounts:** Sign in or create an account at `/signin` (scrypt-hashed passwords, signed HttpOnly session cookies), or continue as a guest. Session history is kept per account.
+- **"Limelight" Design System:** A dark theatre where the rendered room carries the colour, glass chrome stays quiet and a single limelight accent marks the next action. Self-hosted Inter Tight, Instrument Serif and JetBrains Mono — no external font requests.
+
 ### 🏛️ Procedural 3D Auditorium
 - **Authentic Speaker Vantage:** View the room from the actual height and perspective of the podium, looking out over raked seating, exit doors, acoustic panels, and warm stage lights.
 - **Batched GPU Rendering:** Built with Three.js and `@react-three/drei` instanced geometry. High performance and smooth 60 FPS even on integrated graphics.
@@ -87,7 +93,7 @@ Public speaking is one of the most widespread fears in the world, yet effective 
 ### 📊 Comprehensive Session Reflection
 - **Granular Metrics:** Measured speaking pace (WPM), filler phrase counter (`um`, `uh`, `you know`, `sort of`, `kind of`), and active duration.
 - **Structured Takeaways:** Concrete strengths, one targeted improvement for your next run, and a provocative question to test your depth of knowledge.
-- **Local Persistence:** Your last 20 session reports persist securely in browser `localStorage`.
+- **Local Persistence:** Your last 20 session reports persist in browser `localStorage`, namespaced per account.
 - **JSON Export:** Download your transcripts and performance reflections anytime.
 
 ---
@@ -97,15 +103,18 @@ Public speaking is one of the most widespread fears in the world, yet effective 
 ```mermaid
 flowchart TD
     subgraph Client ["Client (React 19 + Three.js)"]
-        UI["Studio Interface (App.tsx)"]
+        Landing["Scroll-Driven Landing (landing/Landing.tsx, HeroScene.tsx)"]
+        Auth["Auth Context & Sign-in (auth/)"]
+        UI["Studio Interface (studio/Studio.tsx)"]
         Audio["Web Audio RMS & Speech Recognition (usePractice.ts)"]
-        Canvas3D["3D Auditorium & Batched Instancing (Room.tsx)"]
+        Canvas3D["Shared 3D Auditorium & Batched Instancing (scene/Auditorium.tsx)"]
         LocalEngine["Deterministic Heuristics Engine (analysis.ts)"]
         Storage["Local History Storage (storage.ts)"]
     end
 
     subgraph Server ["Server (Express 5 + Google GenAI)"]
         API["/api/audience & /api/health (server/index.ts)"]
+        AuthAPI["/api/auth/* · scrypt + signed cookies (auth.ts)"]
         Val["Zod Schema Validator (validation.ts)"]
         GeminiRouter["Model Router & Free-Tier Fallback (gemini.ts)"]
     end
@@ -116,6 +125,8 @@ flowchart TD
     end
 
     Audio -->|Live Transcript & Mic Levels| UI
+    Landing -->|Scroll Progress| Canvas3D
+    Auth -->|register / login / me| AuthAPI
     UI -->|Pointers & Gestures| Canvas3D
     UI -->|Speech & Metrics| LocalEngine
     UI -->|Session Reports| Storage
@@ -214,7 +225,8 @@ Podium models audience engagement using deterministic behavioral heuristics cali
 | :--- | :--- |
 | **Frontend Framework** | React 19, TypeScript 5.7 |
 | **3D Engine** | Three.js (r180), `@react-three/fiber`, `@react-three/drei` |
-| **Styling & Design** | Vanilla CSS, Glassmorphism, Google Fonts (`DM Serif Display`, `Manrope`) |
+| **Styling & Design** | Vanilla CSS design tokens, self-hosted Fontsource fonts (`Inter Tight`, `Instrument Serif`, `JetBrains Mono`) |
+| **Motion** | GSAP 3 + ScrollTrigger, Lenis smooth scrolling |
 | **Icons** | Lucide React |
 | **Backend & API** | Node.js, Express 5.1, `dotenv` |
 | **AI & Validation** | `@google/genai` (SDK 1.0+), Zod 3.24 (Type-safe schema boundaries) |
@@ -252,6 +264,7 @@ npm start
 - **Telemetry Boundaries:** Only clean text transcript excerpts and basic timing counts are transmitted to Gemini when explicitly enabled by the user.
 - **No Pseudo-Science:** Podium explicitly **does not** infer mental health, gaze tracking, emotion recognition, racial accent grading, or biometric anxiety. All engagement scores are transparently labeled as simulations.
 - **Local Sovereignty:** Session history is saved exclusively in the user's browser `localStorage` and can be wiped with a single click.
+- **Accounts:** Only name, email and an scrypt password hash are stored, in `data/users.json` on your server (git-ignored). Sessions are stateless HMAC-signed cookies; set `SESSION_SECRET` or one is generated into `data/.session-secret`.
 
 ---
 
@@ -267,6 +280,8 @@ Podium/
 ├── server/
 │   ├── gemini.ts             # Google GenAI model router with free-tier fallback
 │   ├── gemini.test.ts        # Model failover & quota handling tests
+│   ├── auth.ts               # Password hashing, signed session tokens & JSON user store
+│   ├── auth.test.ts          # Token tampering, hashing & user store tests
 │   ├── index.ts              # Express 5 API with security headers & rate limiting
 │   ├── validation.ts         # Zod schemas for inbound/outbound payloads
 │   └── validation.test.ts    # Schema boundary & bounds tests
@@ -278,10 +293,15 @@ Podium/
 │   │   ├── analysis.test.ts  # Tokenizer & pacing test suites
 │   │   ├── storage.ts        # Zod-validated localStorage history adapter
 │   │   └── types.ts          # Core domain models & speech interface declarations
-│   ├── App.tsx               # Main rehearsal studio, focus mode & history views
-│   ├── Room.tsx              # Procedural Three.js auditorium with batched instances
-│   ├── main.tsx              # React 19 root
-│   └── styles.css            # Responsive typography, dark/light themes & glass cards
+│   ├── auth/                 # AuthContext (account + guest) and the sign-in page
+│   ├── landing/              # Landing page, scroll-driven HeroScene & motion helpers
+│   ├── scene/Auditorium.tsx  # Shared procedural theatre, lighting rig & instancing
+│   ├── studio/               # Studio shell, panels, dialogs, history & StageRoom
+│   ├── styles/               # base (tokens), landing, auth & studio stylesheets
+│   ├── ui/                   # Dialog, IconButton & Wordmark primitives
+│   ├── App.tsx               # Routes and auth guards
+│   ├── router.tsx            # Tiny History API router
+│   └── main.tsx              # React 19 root, fonts & styles
 ├── index.html                # HTML5 entrypoint with SEO meta tags
 ├── LICENSE                   # MIT License
 ├── package.json              # Project dependencies & scripts
