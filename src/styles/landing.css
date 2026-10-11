@@ -195,7 +195,7 @@
 
 .lfooter { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 28px var(--gutter); border-top: 1px solid var(--line); color: var(--ink-3); font-size: 13px; }
 .lfooter nav { display: flex; gap: 22px; }
-.lfooter nav a, .lfooter nav button { color: var(--ink-2); font-size: 13px; transition: color .2s; }
+.lfooter nav a, .lfooter nav button { display: inline-flex; align-items: center; min-height: 32px; color: var(--ink-2); font-size: 13px; transition: color .2s; }
 .lfooter nav a:hover, .lfooter nav button:hover { color: var(--ink); }
 
 @media (max-width: 1100px) {

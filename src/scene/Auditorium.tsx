@@ -3,6 +3,8 @@ import { useFrame } from '@react-three/fiber';
 import { RoundedBox, SpotLight, createInstances } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Reaction } from '../lib/analysis';
+import { crowd } from './characters';
+import { outlineMaterial, personParts, toonMaterial } from './animeGeometry';
 
 /**
  * A procedural, theatre-lit auditorium shared by the landing hero and the studio.
@@ -12,73 +14,62 @@ import type { Reaction } from '../lib/analysis';
 export type Lighting = { house: number; spot: number };
 type Vec3 = [number, number, number];
 
-const bodyColors = ['#4a5d52', '#8a6a55', '#2e4356', '#c9a98f', '#4b4f55', '#6f8189', '#9a5f55', '#d8c7a5', '#5b4a6b', '#a07a3c'];
-const skinColors = ['#b47d59', '#e9bb95', '#8b563b', '#d3a279', '#f2c9a6', '#a77250'];
-const hairColors = ['#2a1f1a', '#1f1c19', '#5a4335', '#141516', '#8a6748'];
 
 const [BoxInstances, BoxInstance] = createInstances();
-const [SphereInstances, SphereInstance] = createInstances();
-const [LimbInstances, LimbInstance] = createInstances();
 const [GlowInstances, GlowInstance] = createInstances();
 const litMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .82 });
 const glowMaterial = new THREE.MeshBasicMaterial({ color: '#ffffff', toneMapped: false });
 const unitBox = new THREE.BoxGeometry(1, 1, 1);
-const sphere = new THREE.SphereGeometry(1, 16, 12);
-const capsule = new THREE.CapsuleGeometry(1, 1, 4, 8);
 const velvet = new THREE.MeshStandardMaterial({ color: '#5c1d27', roughness: .95 });
 
 type Part = { position: Vec3; scale: Vec3; color: string; rotation?: Vec3 };
 const Box = (p: Part) => <BoxInstance {...p}/>;
-const Ellipsoid = (p: Part) => <SphereInstance {...p}/>;
-const Limb = (p: Part) => <LimbInstance {...p}/>;
 const Glow = (p: Part) => <GlowInstance {...p}/>;
 
 type Mood = { engagement: number; reaction: Reaction; question: boolean; reduced: boolean };
 
+/** One cel-shaded anime listener. Geometry is generated once per seat and cached. */
 function Person({ index, position, engagement, reaction, question, reduced }: Mood & { index: number; position: Vec3 }) {
-  const head = useRef<THREE.Group>(null), torso = useRef<THREE.Group>(null), arm = useRef<THREE.Group>(null);
-  const shirt = bodyColors[index % bodyColors.length], skin = skinColors[(index * 7) % skinColors.length], hair = hairColors[index % hairColors.length];
+  const parts = useMemo(() => personParts(index, crowd[index]), [index]);
+  const root = useRef<THREE.Group>(null), head = useRef<THREE.Group>(null), eyes = useRef<THREE.Group>(null), arm = useRef<THREE.Group>(null);
   const asker = question && index === 5;
+  const blinkEvery = 2.6 + (index * 0.37) % 3.2;
   useFrame(({ clock }) => {
     if (reduced) return;
     const t = clock.elapsedTime, phase = index * 2.41;
     if (head.current) {
       const distracted = reaction === 'distracted' && index % 3 === 0;
-      const nod = asker ? -.1 : engagement > 70 ? Math.sin(t * 1.3 + phase) * .06 : Math.sin(t * .5 + phase) * .02;
+      const nod = asker ? -.12 : engagement > 70 ? Math.sin(t * 1.3 + phase) * .06 : Math.sin(t * .5 + phase) * .02;
       head.current.rotation.x = THREE.MathUtils.lerp(head.current.rotation.x, nod, .035);
-      head.current.rotation.y = THREE.MathUtils.lerp(head.current.rotation.y, distracted ? Math.sin(t * .3 + phase) * .6 : Math.sin(t * .22 + phase) * .045, .025);
+      head.current.rotation.y = THREE.MathUtils.lerp(head.current.rotation.y, distracted ? Math.sin(t * .3 + phase) * .6 : Math.sin(t * .22 + phase) * .06, .025);
+      head.current.rotation.z = Math.sin(t * .31 + phase) * .025;
     }
-    if (torso.current) torso.current.rotation.z = Math.sin(t * .42 + phase) * .013;
-    if (arm.current) arm.current.rotation.z = THREE.MathUtils.lerp(arm.current.rotation.z, asker ? -2.55 : .14, .03);
+    if (eyes.current) {
+      const k = ((t + phase) % blinkEvery) / .14;
+      eyes.current.scale.y = k < 1 ? Math.max(.08, Math.abs(1 - k * 2)) : 1;
+    }
+    if (root.current) root.current.rotation.z = Math.sin(t * .42 + phase) * .01;
+    if (arm.current) {
+      // Swing out (z) and tip the forward-resting forearm upward (x) so the hand ends overhead.
+      arm.current.rotation.z = THREE.MathUtils.lerp(arm.current.rotation.z, asker ? 2.65 : 0, .04);
+      arm.current.rotation.x = THREE.MathUtils.lerp(arm.current.rotation.x, asker ? -.85 : 0, .04);
+    }
   });
   return <group position={position}>
-    <Limb position={[-.13, .42, .24]} scale={[.095, .23, .095]} color="#26292a" rotation={[-.16, 0, 0]}/>
-    <Limb position={[.13, .42, .24]} scale={[.095, .23, .095]} color="#26292a" rotation={[-.16, 0, 0]}/>
-    <Ellipsoid position={[-.14, .17, .39]} scale={[.12, .085, .2]} color="#1f1e1d"/>
-    <Ellipsoid position={[.14, .17, .39]} scale={[.12, .085, .2]} color="#1f1e1d"/>
-    <group ref={torso} position={[0, .78, .015]}>
-      <Ellipsoid position={[0, .18, 0]} scale={[.32, .41, .19]} color={shirt}/>
-      <Box position={[0, .33, .178]} scale={[.035, .26, .012]} color={index % 2 ? '#ded8cb' : shirt}/>
-      <Limb position={[-.29, .13, .08]} scale={[.085, .21, .085]} color={shirt} rotation={[-.3, 0, -.1]}/>
-      <Ellipsoid position={[-.3, -.08, .2]} scale={[.075, .075, .09]} color={skin}/>
-      <group ref={arm} position={[.29, .36, 0]} rotation={[0, 0, .14]}>
-        <Limb position={[0, -.23, .09]} scale={[.085, .21, .085]} color={shirt} rotation={[-.3, 0, 0]}/>
-        <Ellipsoid position={[0, -.44, .18]} scale={[.075, .08, .075]} color={skin}/>
+    <group ref={root}>
+      <mesh geometry={parts.body} material={toonMaterial}/>
+      <mesh geometry={parts.body} material={outlineMaterial}/>
+      <group ref={arm} position={parts.shoulder}>
+        <mesh geometry={parts.arm} material={toonMaterial}/>
+        <mesh geometry={parts.arm} material={outlineMaterial}/>
       </group>
-      <Limb position={[0, .61, 0]} scale={[.08, .065, .08]} color={skin}/>
-      <group ref={head} position={[0, .78, 0]}>
-        <Ellipsoid position={[0, 0, 0]} scale={[.185, .235, .17]} color={skin}/>
-        <Ellipsoid position={[0, .115, -.025]} scale={[.19, .147, .174]} color={hair}/>
-        {index % 4 === 0 && <Ellipsoid position={[0, .065, -.115]} scale={[.2, .225, .11]} color={hair}/>}
-        <Ellipsoid position={[-.075, .025, .151]} scale={[.018, .013, .013]} color="#1d1916"/>
-        <Ellipsoid position={[.075, .025, .151]} scale={[.018, .013, .013]} color="#1d1916"/>
-        <Ellipsoid position={[0, -.045, .167]} scale={[.024, .035, .025]} color={skin}/>
-        <Box position={[0, -.106, .151]} scale={[.055, .008, .012]} color="#7d4a3b"/>
-        {index % 6 === 0 && <>
-          <Box position={[-.073, .025, .167]} scale={[.1, .062, .014]} color="#2b2e2d"/>
-          <Box position={[.073, .025, .167]} scale={[.1, .062, .014]} color="#2b2e2d"/>
-          <Box position={[0, .025, .17]} scale={[.048, .012, .016]} color="#2b2e2d"/>
-        </>}
+      <group ref={head} position={parts.neck}>
+        <mesh geometry={parts.head} material={toonMaterial}/>
+        <mesh geometry={parts.head} material={outlineMaterial}/>
+        <mesh geometry={parts.face} material={toonMaterial}/>
+        <group ref={eyes} position={[0, parts.eyeLine, 0]}>
+          <mesh geometry={parts.eyes} material={toonMaterial}/>
+        </group>
       </group>
     </group>
   </group>;
@@ -132,6 +123,49 @@ function Lights({ lighting, haze }: { lighting: MutableRefObject<Lighting>; haze
   </>;
 }
 
+/**
+ * Gooseneck lectern microphone, built as real connected geometry: a weighted base plate
+ * resting on the sloped lectern top, a short stem, a continuous curved neck and a foam
+ * windscreen aimed at the speaker's mouth. Coordinates are local to the lectern group.
+ */
+const micMetal = new THREE.MeshStandardMaterial({ color: '#1b1d1f', metalness: .85, roughness: .32 });
+const micChrome = new THREE.MeshStandardMaterial({ color: '#8d9296', metalness: 1, roughness: .18 });
+const micFoam = new THREE.MeshStandardMaterial({ color: '#111213', roughness: 1 });
+const micLed = new THREE.MeshBasicMaterial({ color: '#d4ff3f', toneMapped: false });
+// The lectern top is tilted 0.1 rad toward the speaker; the base sits flush on it.
+const MIC_BASE: Vec3 = [.62, 1.19, -.3];
+const neckCurve = new THREE.CatmullRomCurve3([
+  new THREE.Vector3(0, .12, 0),
+  new THREE.Vector3(0, .32, .01),
+  new THREE.Vector3(-.04, .5, .08),
+  new THREE.Vector3(-.12, .62, .22),
+  new THREE.Vector3(-.2, .66, .36),
+]);
+const neckGeometry = new THREE.TubeGeometry(neckCurve, 48, .0085, 10, false);
+const neckEnd = neckCurve.getPoint(1);
+const neckTangent = neckCurve.getTangent(1).normalize();
+const headQuaternion = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), neckTangent);
+// Flexible-neck ribs every few centimetres sell the gooseneck at close range.
+const neckRibs = Array.from({ length: 14 }, (_, i) => {
+  const t = .08 + i * .065;
+  return { position: neckCurve.getPoint(t), quaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), neckCurve.getTangent(t).normalize()) };
+});
+
+function Microphone() {
+  return <group position={MIC_BASE} rotation={[.1, 0, 0]}>
+    <mesh material={micMetal} position={[0, .008, 0]}><cylinderGeometry args={[.075, .085, .016, 32]}/></mesh>
+    <mesh material={micChrome} position={[0, .018, 0]}><cylinderGeometry args={[.03, .04, .006, 24]}/></mesh>
+    <mesh material={micMetal} position={[0, .07, 0]}><cylinderGeometry args={[.012, .014, .11, 16]}/></mesh>
+    <mesh material={micMetal} geometry={neckGeometry}/>
+    {neckRibs.map((rib, i) => <mesh key={i} material={micChrome} position={rib.position} quaternion={rib.quaternion}><torusGeometry args={[.0095, .0018, 6, 14]}/></mesh>)}
+    <group position={neckEnd} quaternion={headQuaternion}>
+      <mesh material={micChrome} position={[0, .012, 0]}><cylinderGeometry args={[.011, .009, .024, 16]}/></mesh>
+      <mesh material={micLed} position={[0, .026, 0]}><torusGeometry args={[.0115, .0022, 8, 24]}/></mesh>
+      <mesh material={micFoam} position={[0, .062, 0]}><capsuleGeometry args={[.021, .05, 8, 16]}/></mesh>
+    </group>
+  </group>;
+}
+
 type AuditoriumProps = Mood & { count: number; lighting: MutableRefObject<Lighting>; haze?: number };
 
 function AuditoriumImpl({ count, engagement, reaction, question, reduced, lighting, haze = .5 }: AuditoriumProps) {
@@ -145,8 +179,6 @@ function AuditoriumImpl({ count, engagement, reaction, question, reduced, lighti
     <fog attach="fog" args={['#060607', 16, 42]}/>
     <Lights lighting={lighting} haze={haze}/>
     <BoxInstances geometry={unitBox} material={litMaterial} limit={1700} dispose={null}>
-    <SphereInstances geometry={sphere} material={litMaterial} limit={1500} dispose={null}>
-    <LimbInstances geometry={capsule} material={litMaterial} limit={500} dispose={null}>
     <GlowInstances geometry={unitBox} material={glowMaterial} limit={120} dispose={null}>
       {/* Floor, stage and planks */}
       <Box position={[0, -.12, -2]} scale={[20, .24, 28]} color="#141316"/>
@@ -192,12 +224,9 @@ function AuditoriumImpl({ count, engagement, reaction, question, reduced, lighti
         <Box position={[0, .52, -.36]} scale={[1.2, .7, .02]} color="#2a1b10"/>
         <Box position={[0, 1.075, .025]} scale={[2, .16, 1.1]} color="#6b4a2c" rotation={[.1, 0, 0]}/>
         <Box position={[0, 1.17, .11]} scale={[.75, .015, .52]} color="#ece4d2" rotation={[.1, 0, 0]}/>
-        <Box position={[.78, 1.4, -.21]} scale={[.025, .5, .025]} color="#1d2020" rotation={[-.3, 0, 0]}/>
-        <Limb position={[.77, 1.71, -.1]} scale={[.025, .16, .025]} color="#1d2020" rotation={[0, 0, .8]}/>
-        <Ellipsoid position={[.65, 1.84, -.08]} scale={[.046, .065, .05]} color="#141818"/>
-        <Glow position={[.65, 1.78, -.04]} scale={[.012, .012, .012]} color="#d4ff3f"/>
+        <Microphone/>
       </group>
-    </GlowInstances></LimbInstances></SphereInstances></BoxInstances>
+    </GlowInstances></BoxInstances>
   </>;
 }
 export const Auditorium = memo(AuditoriumImpl);

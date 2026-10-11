@@ -177,6 +177,7 @@ export default function Studio({ view, user }: { view: 'studio' | 'history'; use
     <StudioNav view={view} user={user} locked={locked} aiEnabled={aiEnabled} onGuide={() => setGuide(true)} onSignOut={() => void leave()}/>
 
     {view === 'studio' ? <main className="studio-main">
+      <h1 className="sr-only">Podium rehearsal studio</h1>
       <section className="stage" aria-label="Auditorium practice room">
         <div className="stage-canvas">
           <Suspense fallback={<div className="room-fallback"><span className="loader"/>Setting up the auditorium…</div>}>
